@@ -13,6 +13,7 @@ class Settings(object):
         self.pixel_size = settings_dict.get('pixel size', 100)
         self.detector_distance = settings_dict.get('detector distance', 100)
         self.cxi_file = settings_dict.get('cxi file', None)
+        self.geom_file = settings_dict.get('geom file', None)
         self.ref_stream_file = settings_dict.get('ref stream file', None)
         self.test_stream_file = settings_dict.get('test stream file', None)
 

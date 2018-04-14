@@ -28,6 +28,7 @@ class GUI(QtGui.QMainWindow):
         self.pixel_size = settings.pixel_size
         self.det_dist = settings.detector_distance
         self.cxi_file = settings.cxi_file
+        self.geom_file = settings.geom_file
         self.ref_stream_file = settings.ref_stream_file
         self.test_stream_file = settings.test_stream_file
 
@@ -42,7 +43,6 @@ class GUI(QtGui.QMainWindow):
         self.nb_frame = 0
         self.frame = 0
         self.data = None
-        self.geom_file = None
         self.geom = None
         self.ref_stream = None
         self.ref_events = []
@@ -55,6 +55,7 @@ class GUI(QtGui.QMainWindow):
         self.show_hkl = False
         self.show_ref_stream = True
         self.show_test_stream = True
+        self.rearrange = False
 
         # plot items
         self.peak_item = pg.ScatterPlotItem(
@@ -126,6 +127,10 @@ class GUI(QtGui.QMainWindow):
             {
                 'name': 'show test stream', 'type': 'bool',
                 'value': self.show_test_stream
+            },
+            {
+                'name': 'rearrange', 'type': 'bool',
+                'value': self.rearrange,
             }
         ]
         self.params = Parameter.create(name='params', type='group',
@@ -133,15 +138,17 @@ class GUI(QtGui.QMainWindow):
         self.parameterTree.setParameters(self.params, showTop=False)
 
         if self.cxi_file is not None:
-            self.load_cxi_file(self.cxi_file)
+            self.load_cxi(self.cxi_file)
+        if self.geom_file is not None:
+            self.load_geom(self.geom_file)
         if self.ref_stream_file is not None:
-            self.load_stream_file(self.ref_stream_file, 'ref')
+            self.load_stream(self.ref_stream_file, 'ref')
         if self.test_stream_file is not None:
-            self.load_stream_file(self.test_stream_file, 'test')
+            self.load_stream(self.test_stream_file, 'test')
 
         # menu bar actions
-        self.action_load_cxi.triggered.connect(self.load_cxi)
-        self.action_load_geom.triggered.connect(self.load_geom)
+        self.action_load_cxi.triggered.connect(self.set_cxi)
+        self.action_load_geom.triggered.connect(self.set_geom)
         self.action_load_ref_stream.triggered.connect(
             partial(self.load_stream, flag='ref'))
         self.action_load_test_stream.triggered.connect(
@@ -159,6 +166,10 @@ class GUI(QtGui.QMainWindow):
             'show test stream').sigValueChanged.connect(
             partial(self.change_show_stream, flag='test')
         )
+        self.params.param(
+            'rearrange').sigValueChanged.connect(
+            self.change_rearrange
+        )
 
         # image view / stream plot slots
         self.peak_stream_item.sigClicked.connect(self.stream_item_clicked)
@@ -166,14 +177,14 @@ class GUI(QtGui.QMainWindow):
         self.test_stream_item.sigClicked.connect(self.stream_item_clicked)
 
     @pyqtSlot()
-    def load_cxi(self):
+    def set_cxi(self):
         filepath, _ = QtGui.QFileDialog.getOpenFileName(
             self, 'Open File', self.workdir, 'CXI File (*.cxi)')
         if filepath == '':
             return
-        self.load_cxi_file(filepath)
+        self.load_cxi(filepath)
 
-    def load_cxi_file(self, cxi_file):
+    def load_cxi(self, cxi_file):
         try:
             h5_obj = h5py.File(cxi_file, 'r')
             data = h5_obj[self.data_location]
@@ -204,17 +215,18 @@ class GUI(QtGui.QMainWindow):
         self.update_display()
         self.update_stream_plot()
 
-    def load_geom(self):
+    def set_geom(self):
         filepath, _ = QtGui.QFileDialog.getOpenFileName(
             self, 'Open file', self.workdir, 'Geom File (*.geom *.h5 *.data)')
         if filepath == '':
             return
-        geom_file = filepath
-        geom = Geometry(geom_file, self.pixel_size)
+        self.load_geom(filepath)
+
+    def load_geom(self, geom_file):
+        geom_file = geom_file
         self.geom_file = geom_file
-        self.geom = geom
-        self.params.param('geometry file').setValue(self.geom_file)
-        self.update_display()
+        self.params.param('geom file').setValue(self.geom_file)
+        self.geom = Geometry(geom_file, pixel_size=self.pixel_size)
 
     @pyqtSlot(object, object)
     def change_frame(self, _, frame):
@@ -226,14 +238,14 @@ class GUI(QtGui.QMainWindow):
         self.update_display()
 
     @pyqtSlot(str)
-    def load_stream(self, flag):
+    def set_stream(self, flag):
         filepath, _ = QtGui.QFileDialog.getOpenFileName(
             self, 'Open File', self.workdir, 'Stream File (*.stream)')
         if filepath == '':
             return
-        self.load_stream_file(filepath, flag)
+        self.load_stream(filepath, flag)
 
-    def load_stream_file(self, stream_file, flag):
+    def load_stream(self, stream_file, flag):
         stream = Stream(stream_file)
         # collect reflections
         all_reflections = {}
@@ -283,6 +295,18 @@ class GUI(QtGui.QMainWindow):
             raise ValueError('Undefined flag: %s' % flag)
         self.update_display()
 
+    @pyqtSlot(object, object)
+    def change_rearrange(self, _, rearrange):
+        if rearrange:
+            if self.geom_file is None:
+                self.params.param('rearrange').setValue(False)
+            else:
+                self.rearrange = True
+                self.load_geom(self.geom_file)
+        else:
+            self.rearrange = False
+        self.update_display()
+
     def update_stream_plot(self):
         if self.cxi_file is not None:
             pos = np.concatenate(
@@ -316,7 +340,7 @@ class GUI(QtGui.QMainWindow):
         if self.data is None:
             return
         image = self.data[self.frame]
-        if self.geom is not None:
+        if self.rearrange:
             image = self.geom.rearrange(image)
         self.image_view.setImage(
             image, autoRange=False, autoLevels=False,
@@ -325,12 +349,18 @@ class GUI(QtGui.QMainWindow):
 
         # plot peaks
         self.peak_item.clear()
-        self.peak_item.setData(pos=self.peaks[self.frame] + 0.5)
+        if self.rearrange:
+            peaks = self.geom.map(self.peaks[self.frame])
+        else:
+            peaks = self.peaks[self.frame]
+        self.peak_item.setData(pos=peaks + 0.5)
 
         # plot reflections
         self.ref_reflection_item.clear()
         if self.show_ref_stream and self.frame in self.ref_events:
             reflections = self.ref_reflections[self.frame]
+            if self.rearrange:
+                reflections = self.geom.map(reflections)
             if len(reflections) > 0:
                 self.ref_reflection_item.setData(pos=reflections + 0.5)
         self.test_reflection_item.clear()

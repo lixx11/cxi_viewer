@@ -82,8 +82,13 @@ def load_geom(filepath):
 
 class Geometry(object):
     def __init__(self, geom_file, pixel_size):
+        """
+        Geometry class.
+        :param geom_file: filepath of geometry file.
+        :param pixel_size: pixel size in micrometers.
+        """
         self.geom_file = geom_file
-        self.pixel_size = pixel_size
+        self.pixel_size = pixel_size * 1.E-6
         self.geom_x, self.geom_y, self.geom_z = load_geom(geom_file)
         self.x = (np.round(self.geom_x / self.pixel_size)).astype(int)
         self.y = (np.round(self.geom_y / self.pixel_size)).astype(int)
@@ -100,42 +105,29 @@ class Geometry(object):
         """
         assembled_img = np.zeros(self.shape)
         assembled_img[self.x.reshape(-1),
-                     self.y.reshape(-1)] = raw_img.reshape(-1)
+                      self.y.reshape(-1)] = raw_img.reshape(-1)
         return assembled_img
 
     def map(self, raw_pos):
         """
         Map raw position to assembled position in pixels.
-        :param raw_pos: raw position in pixels.
-        :return: assembled position in pixels.
+        :param raw_pos: raw position in pixels, Nx2 shape.
+        :return: assembled position in pixels, Nx2 shape.
         """
         raw_pos = (np.round(raw_pos)).astype(int)
+        if len(raw_pos.shape) != 2:
+            raise ValueError('raw_pos should be 2d array!')
+        if raw_pos.shape[1] != 2:
+            raise  ValueError('raw_pos should have Nx2 shape!')
         # map raw coordinates to assembled coordinates in meters
-        assembled_pos = np.array([
-            self.geom_x[raw_pos[0], raw_pos[1]],
-            self.geom_y[raw_pos[0], raw_pos[1]]
-        ])
+        assembled_pos = np.zeros_like(raw_pos, dtype=float)
+        assembled_pos[:, 0] = self.geom_x[raw_pos[:, 0], raw_pos[:, 1]]
+        assembled_pos[:, 1] = self.geom_y[raw_pos[:, 0], raw_pos[:, 1]]
         # map assembled coordinates in meters to pixels
         assembled_pos /= self.pixel_size
         assembled_pos -= self.offset
         return assembled_pos
 
-    # def batch_map_from_raw_in_m(self, raw_XYs):
-    #     raw_XYs = np.int_(np.rint(raw_XYs))
-    #     peak_remap_x_in_m = self.geom_x[raw_XYs[:, 1], raw_XYs[:, 0]]
-    #     peak_remap_y_in_m = self.geom_y[raw_XYs[:, 1], raw_XYs[:, 0]]
-    #     peak_remap_xy_in_m = np.vstack((
-    #         peak_remap_x_in_m,
-    #         peak_remap_y_in_m
-    #     )).T
-    #     return peak_remap_xy_in_m
-    #
-    # def batch_map_from_ass_in_m(self, ass_XYs):
-    #     ass_XYs[:, 0] -= self.offset_x
-    #     ass_XYs[:, 1] -= self.offset_y
-    #
-    #     peak_remap_xy_in_m = ass_XYs * self.pixel_size
-    #     return peak_remap_xy_in_m
 
 
 
