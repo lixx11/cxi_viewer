@@ -137,7 +137,8 @@ class Stream(object):
         self.index_stats = []
         self.chunks = []
         self.image_filename_list = []
-        self.peaks = []
+        self.peaks = []  # raw peaks
+        self.indexed_peaks = []  # peaks of indexed pattern
         self.crystals = []
         self.reflections = []
         self.indexers = []
@@ -151,6 +152,7 @@ class Stream(object):
         print('total unindexed: %d' % self.nb_unindexed)
         print('total crystals: %d' % len(self.crystals))
         print('total peaks: %d' % len(self.peaks))
+        print('total indexed peaks: %d' % len(self.indexed_peaks))
         print('total reflections: %d' % len(self.reflections))
 
     def parse_stream(self):
@@ -190,6 +192,7 @@ class Stream(object):
                 self.nb_unindexed += 1
             else:
                 self.nb_indexed += 1
+                self.indexed_peaks += chunk.peaks
             indexers.append(indexer)
             self.crystals += chunk.crystals
             for j in range(len(chunk.crystals)):
